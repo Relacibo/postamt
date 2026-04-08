@@ -109,16 +109,70 @@ pub fn extract_stamp(source_path: &Path, stamp_index: usize, grid_cols: usize) -
 }
 
 pub fn create_envelope(profile_width: f32, profile_height: f32, 
-                       _offset_x: f32, _offset_y: f32, 
-                       _stamp_pdf: &[u8]) -> Result<Vec<u8>> {
-    use printpdf::*;
+                       offset_x: f32, offset_y: f32, 
+                       stamp_pdf: &[u8]) -> Result<Vec<u8>> {
+    // Load stamp document
+    let stamp_doc = Document::load_mem(stamp_pdf)?;
     
-    let doc = PdfDocument::new("Envelope");
-    let _page = PdfPage::new(Mm(profile_width), Mm(profile_height), vec![]);
+    // Start with a copy of the stamp document (includes all objects/resources)
+    let mut env_doc = stamp_doc.clone();
     
-    let mut warnings = vec![];
-    let opts = PdfSaveOptions::default();
-    let buffer = doc.save(&opts, &mut warnings);
+    // Convert mm to points (1mm = 2.834645669 points)
+    let page_width = profile_width * 2.834645669;
+    let page_height = profile_height * 2.834645669;
+    let offset_x_pt = offset_x * 2.834645669;
+    let offset_y_pt = offset_y * 2.834645669;
+    
+    // Get the stamp page
+    let pages = env_doc.get_pages();
+    let page_num = *pages.keys().next().unwrap();
+    let page_ref = *pages.get(&page_num).unwrap();
+    
+    // Modify the existing page
+    if let Ok(page) = env_doc.get_object_mut(page_ref).and_then(|o| o.as_dict_mut()) {
+        // Update MediaBox to envelope size
+        page.set("MediaBox", Object::Array(vec![
+            Object::Real(0.0),
+            Object::Real(0.0),
+            Object::Real(page_width),
+            Object::Real(page_height),
+        ]));
+        
+        // Remove any CropBox
+        page.remove(b"CropBox");
+        
+        // Wrap existing content in transformation to position stamp
+        if let Ok(contents_ref) = page.get(b"Contents") {
+            let contents_id = match contents_ref {
+                Object::Reference(id) => *id,
+                _ => return Err(Error::Custom("Unexpected Contents format".to_string())),
+            };
+            
+            // Get existing content
+            let existing_content = if let Ok(Object::Stream(stream)) = env_doc.get_object(contents_id) {
+                stream.content.clone()
+            } else {
+                vec![]
+            };
+            
+            // Create new content with transformation
+            let mut new_content = format!(
+                "q\n1 0 0 1 {} {} cm\n",
+                offset_x_pt, offset_y_pt
+            ).into_bytes();
+            new_content.extend_from_slice(&existing_content);
+            new_content.extend_from_slice(b"\nQ\n");
+            
+            // Update the content stream
+            if let Ok(Object::Stream(stream)) = env_doc.get_object_mut(contents_id) {
+                stream.content = new_content;
+            }
+        }
+    }
+    
+    // Save
+    let mut buffer = Vec::new();
+    env_doc.save_to(&mut buffer)?;
     
     Ok(buffer)
 }
