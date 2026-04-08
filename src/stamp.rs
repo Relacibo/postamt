@@ -22,12 +22,34 @@ pub fn add_stamps(conn: &Connection, config: &Config, path: &str, should_move: b
         return Ok(());
     }
     
-    // Extract matrix codes
-    let matrix_codes = pdf::extract_matrix_codes(
-        source_path,
-        config.layout.grid_cols,
-        config.layout.grid_rows_max,
-    )?;
+    // Try to extract matrix codes from filename first (for generated-*.pdf)
+    let file_name = source_path.file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    
+    let matrix_codes = if file_name.starts_with("generated-") {
+        // Extract matrix code from filename: generated-XXXX_XXXX_XXXX_XX_XXXX_XXXXX.pdf
+        if let Some(matrix_part) = file_name.strip_prefix("generated-").and_then(|s| s.strip_suffix(".pdf")) {
+            let matrix_code = matrix_part.replace("_", " ");
+            // For generated stamps, duplicate the matrix code for all grid positions
+            // Assume full grid: 4 cols x 8 rows = 32 stamps
+            vec![matrix_code; 32]
+        } else {
+            // Fallback to grid extraction
+            pdf::extract_matrix_codes(
+                source_path,
+                config.layout.grid_cols,
+                config.layout.grid_rows_max,
+            )?
+        }
+    } else {
+        // Standard grid extraction
+        pdf::extract_matrix_codes(
+            source_path,
+            config.layout.grid_cols,
+            config.layout.grid_rows_max,
+        )?
+    };
     
     if matrix_codes.is_empty() {
         return Err(Error::Custom("No valid stamps found in PDF".to_string()));
@@ -103,9 +125,6 @@ pub fn print_stamp(
     let profile = crate::config::get_profile(config, profile_name)
         .ok_or_else(|| Error::Custom(format!("Profile not found: {}", profile_name)))?;
     
-    // Determine printer
-    let printer = printer_name.unwrap_or(&config.default_printer);
-    
     // Load source PDF from vault
     let vault_path = db::get_vault_path()?;
     let source_pdf = vault_path.join(format!("{}.pdf", stamp.parent_hash));
@@ -132,13 +151,22 @@ pub fn print_stamp(
         
         println!("Dry run: saved to {}", output_path.display());
     } else {
+        // Resolve printer (may prompt user)
+        let printer = match printer::resolve_printer(config, printer_name)? {
+            Some(p) => p,
+            None => {
+                println!("Cancelled.");
+                return Ok(());
+            }
+        };
+        
         // Create temporary file for printing
         let temp_dir = std::env::temp_dir();
         let temp_path = temp_dir.join(format!("postamt-{}.pdf", stamp.id));
         std::fs::write(&temp_path, envelope_data)?;
         
         // Print
-        printer::print_pdf(printer, temp_path.to_str().unwrap())?;
+        printer::print_pdf(&printer, temp_path.to_str().unwrap())?;
         
         // Mark as printed
         db::mark_stamp_printed_by_id(conn, stamp.id)?;
@@ -147,6 +175,82 @@ pub fn print_stamp(
         let _ = std::fs::remove_file(temp_path);
         
         println!("Printed stamp {} to {}", stamp.matrix_number, printer);
+    }
+    
+    Ok(())
+}
+
+pub fn list_stamps(
+    conn: &Connection,
+    file_filter: Option<&str>,
+    available_only: bool,
+    used_only: bool,
+    format: crate::OutputFormat,
+) -> Result<()> {
+    use crate::OutputFormat;
+    use serde::Serialize;
+    
+    #[derive(Serialize)]
+    struct StampOutput {
+        id: i64,
+        index: i64,
+        matrix: String,
+        status: String,
+        printed_at: Option<String>,
+    }
+    
+    #[derive(Serialize)]
+    struct FileOutput {
+        hash: String,
+        file_name: String,
+        created_at: String,
+        total_stamps: i64,
+        stamps: Vec<StampOutput>,
+    }
+    
+    let imports = db::get_imports(conn, file_filter)?;
+    let mut files: Vec<FileOutput> = Vec::new();
+    
+    for import in imports {
+        let stamps = db::get_stamps_for_import(conn, &import.hash, available_only, used_only)?;
+        
+        // Skip files with no matching stamps
+        if stamps.is_empty() && (available_only || used_only) {
+            continue;
+        }
+        
+        let stamp_outputs: Vec<StampOutput> = stamps.iter().map(|s| StampOutput {
+            id: s.id,
+            index: s.stamp_index,
+            matrix: s.matrix_number.clone(),
+            status: if s.printed_at.is_some() { "used".to_string() } else { "available".to_string() },
+            printed_at: s.printed_at.clone(),
+        }).collect();
+        
+        files.push(FileOutput {
+            hash: import.hash,
+            file_name: import.file_name,
+            created_at: import.created_at,
+            total_stamps: import.total_stamps,
+            stamps: stamp_outputs,
+        });
+    }
+    
+    match format {
+        OutputFormat::Toml => {
+            #[derive(Serialize)]
+            struct Root {
+                files: Vec<FileOutput>,
+            }
+            let output = toml::to_string_pretty(&Root { files })
+                .map_err(|e| Error::Custom(format!("TOML serialize error: {}", e)))?;
+            println!("{}", output);
+        }
+        OutputFormat::Json => {
+            let output = serde_json::to_string_pretty(&files)
+                .map_err(|e| Error::Custom(format!("JSON serialize error: {}", e)))?;
+            println!("{}", output);
+        }
     }
     
     Ok(())

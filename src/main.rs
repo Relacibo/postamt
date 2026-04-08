@@ -40,6 +40,12 @@ fn run() -> error::Result<()> {
         Commands::Print { profile, printer, dry_run } => {
             stamp::print_stamp(&conn, &config, profile.as_deref(), printer.as_deref(), dry_run)?;
         }
+        Commands::List { file, available, used, format } => {
+            stamp::list_stamps(&conn, file.as_deref(), available, used, format.into())?;
+        }
+        Commands::Config { key, value } => {
+            config::handle_config_command(key.as_deref(), value.as_deref())?;
+        }
     }
 
     Ok(())

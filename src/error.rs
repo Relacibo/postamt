@@ -4,16 +4,13 @@ use thiserror::Error;
 pub enum Error {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
-    
+
     #[error("PDF error: {0}")]
     Pdf(#[from] lopdf::Error),
-    
-    #[error("Config error: {0}")]
-    Config(#[from] confy::ConfyError),
-    
+
     #[error("{0}")]
     Custom(String),
 }

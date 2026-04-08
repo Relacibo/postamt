@@ -149,3 +149,82 @@ pub fn mark_stamp_printed_by_id(conn: &Connection, id: i64) -> Result<()> {
     )?;
     Ok(())
 }
+
+pub struct ImportRecord {
+    pub hash: String,
+    pub file_name: String,
+    pub total_stamps: i64,
+    pub created_at: String,
+}
+
+pub struct StampInfo {
+    pub id: i64,
+    pub stamp_index: i64,
+    pub matrix_number: String,
+    pub printed_at: Option<String>,
+}
+
+pub fn get_imports(conn: &Connection, file_filter: Option<&str>) -> Result<Vec<ImportRecord>> {
+    let mut result = Vec::new();
+    
+    if let Some(filter) = file_filter {
+        let pattern = format!("%{}%", filter);
+        let mut stmt = conn.prepare(
+            "SELECT hash, file_name, total_stamps, created_at FROM imports WHERE hash LIKE ?1 OR file_name LIKE ?1 ORDER BY created_at DESC"
+        )?;
+        let rows = stmt.query_map(params![pattern], |row| {
+            Ok(ImportRecord {
+                hash: row.get(0)?,
+                file_name: row.get(1)?,
+                total_stamps: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        for row in rows {
+            result.push(row?);
+        }
+    } else {
+        let mut stmt = conn.prepare(
+            "SELECT hash, file_name, total_stamps, created_at FROM imports ORDER BY created_at DESC"
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ImportRecord {
+                hash: row.get(0)?,
+                file_name: row.get(1)?,
+                total_stamps: row.get(2)?,
+                created_at: row.get(3)?,
+            })
+        })?;
+        for row in rows {
+            result.push(row?);
+        }
+    }
+    
+    Ok(result)
+}
+
+pub fn get_stamps_for_import(conn: &Connection, parent_hash: &str, available_only: bool, used_only: bool) -> Result<Vec<StampInfo>> {
+    let query = if available_only {
+        "SELECT id, stamp_index, matrix_number, printed_at FROM stamps WHERE parent_hash = ?1 AND printed_at IS NULL ORDER BY stamp_index"
+    } else if used_only {
+        "SELECT id, stamp_index, matrix_number, printed_at FROM stamps WHERE parent_hash = ?1 AND printed_at IS NOT NULL ORDER BY stamp_index"
+    } else {
+        "SELECT id, stamp_index, matrix_number, printed_at FROM stamps WHERE parent_hash = ?1 ORDER BY stamp_index"
+    };
+    
+    let mut stmt = conn.prepare(query)?;
+    let rows = stmt.query_map(params![parent_hash], |row| {
+        Ok(StampInfo {
+            id: row.get(0)?,
+            stamp_index: row.get(1)?,
+            matrix_number: row.get(2)?,
+            printed_at: row.get(3)?,
+        })
+    })?;
+    
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
+}
