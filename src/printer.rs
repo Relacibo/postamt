@@ -48,7 +48,7 @@ pub fn list_printers(config: &Config) -> Result<()> {
     Ok(())
 }
 
-pub fn prompt_for_printer(config: &Config) -> Result<Option<String>> {
+pub fn prompt_for_printer() -> Result<Option<String>> {
     let printers = get_printers();
 
     if printers.is_empty() {
@@ -108,7 +108,7 @@ pub fn resolve_printer(config: &Config, printer_arg: Option<&str>) -> Result<Opt
     }
 
     // 3. Prompt user
-    prompt_for_printer(config)
+    prompt_for_printer()
 }
 
 pub fn print_pdf(printer: &str, pdf_path: &str) -> Result<()> {

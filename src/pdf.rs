@@ -5,6 +5,10 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
+// Grid layout constants for Deutsche Post stamp sheets
+pub const GRID_COLS: usize = 4;
+pub const GRID_ROWS_MAX: usize = 8;
+
 pub fn compute_hash(path: &Path) -> Result<String> {
     let mut file = fs::File::open(path)?;
     let mut hasher = Sha256::new();
@@ -15,11 +19,7 @@ pub fn compute_hash(path: &Path) -> Result<String> {
     Ok(hex::encode(result))
 }
 
-pub fn extract_matrix_codes(
-    path: &Path,
-    grid_cols: usize,
-    grid_rows_max: usize,
-) -> Result<Vec<String>> {
+pub fn extract_matrix_codes(path: &Path) -> Result<Vec<String>> {
     let doc = Document::load(path)?;
     let mut matrix_codes = Vec::new();
 
@@ -40,7 +40,7 @@ pub fn extract_matrix_codes(
         matrix_codes.push(cap.as_str().to_string());
     }
 
-    let max_stamps = grid_cols * grid_rows_max;
+    let max_stamps = GRID_COLS * GRID_ROWS_MAX;
     if matrix_codes.len() > max_stamps {
         return Err(Error::Custom(format!(
             "Too many stamps found: {} (max: {})",
@@ -52,11 +52,11 @@ pub fn extract_matrix_codes(
     Ok(matrix_codes)
 }
 
-pub fn extract_stamp(source_path: &Path, stamp_index: usize, grid_cols: usize) -> Result<Vec<u8>> {
+pub fn extract_stamp(source_path: &Path, stamp_index: usize) -> Result<Vec<u8>> {
     let mut doc = Document::load(source_path)?;
 
-    let row = stamp_index / grid_cols;
-    let col = stamp_index % grid_cols;
+    let row = stamp_index / GRID_COLS;
+    let col = stamp_index % GRID_COLS;
 
     // Exact cross positions measured from TestPrint-full.pdf at 72 DPI
     // Crosses mark the corners of stamps, stamps are BETWEEN crosses

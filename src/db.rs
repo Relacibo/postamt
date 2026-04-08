@@ -117,11 +117,34 @@ pub struct StampRecord {
     pub parent_hash: String,
     pub stamp_index: i64,
     pub matrix_number: String,
+    pub used: bool,
+}
+
+pub fn get_stamp_by_id(conn: &Connection, identifier: &str) -> Result<Option<StampRecord>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, parent_hash, stamp_index, matrix_number, printed_at IS NOT NULL as used
+         FROM stamps 
+         WHERE matrix_number = ?1 OR CAST(id AS TEXT) = ?1"
+    )?;
+    
+    let mut rows = stmt.query(params![identifier])?;
+    
+    if let Some(row) = rows.next()? {
+        Ok(Some(StampRecord {
+            id: row.get(0)?,
+            parent_hash: row.get(1)?,
+            stamp_index: row.get(2)?,
+            matrix_number: row.get(3)?,
+            used: row.get(4)?,
+        }))
+    } else {
+        Ok(None)
+    }
 }
 
 pub fn get_oldest_available_stamp(conn: &Connection) -> Result<Option<StampRecord>> {
     let mut stmt = conn.prepare(
-        "SELECT id, parent_hash, stamp_index, matrix_number 
+        "SELECT id, parent_hash, stamp_index, matrix_number, printed_at IS NOT NULL as used
          FROM stamps 
          WHERE printed_at IS NULL 
          ORDER BY id ASC 
@@ -136,6 +159,7 @@ pub fn get_oldest_available_stamp(conn: &Connection) -> Result<Option<StampRecor
             parent_hash: row.get(1)?,
             stamp_index: row.get(2)?,
             matrix_number: row.get(3)?,
+            used: row.get(4)?,
         }))
     } else {
         Ok(None)

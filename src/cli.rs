@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
 use postamt_rs::OutputFormat;
 
 #[derive(Parser)]
@@ -50,12 +51,16 @@ pub enum Commands {
     
     #[command(about = "Print envelope with stamp")]
     Print {
+        #[arg(help = "Specific stamp identifier to print")]
+        identifier: Option<String>,
         #[arg(long)]
         profile: Option<String>,
         #[arg(long)]
         printer: Option<String>,
         #[arg(long)]
         dry_run: bool,
+        #[arg(long, help = "Force printing even if stamp is marked as used")]
+        force: bool,
     },
     
     #[command(about = "List stamps and files")]
@@ -76,5 +81,11 @@ pub enum Commands {
         key: Option<String>,
         #[arg(help = "Value to set")]
         value: Option<String>,
+    },
+
+    #[command(about = "Generate shell completions")]
+    Completions {
+        #[arg(value_enum, help = "Shell to generate completions for")]
+        shell: Shell,
     },
 }

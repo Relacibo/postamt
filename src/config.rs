@@ -8,7 +8,6 @@ pub struct Config {
     pub import: ImportConfig,
     #[serde(skip)]
     pub profiles: HashMap<String, Profile>,
-    pub layout: LayoutConfig,
 }
 
 // Intermediate struct for loading from TOML
@@ -19,7 +18,6 @@ struct ConfigFile {
     import: ImportConfig,
     #[serde(default)]
     profiles: HashMap<String, Profile>,
-    layout: LayoutConfig,
 }
 
 impl Default for ConfigFile {
@@ -31,10 +29,6 @@ impl Default for ConfigFile {
                 default_action: ImportAction::Copy,
             },
             profiles: HashMap::new(),
-            layout: LayoutConfig {
-                grid_cols: 4,
-                grid_rows_max: 8,
-            },
         }
     }
 }
@@ -57,12 +51,6 @@ pub struct Profile {
     pub height: f32,
     pub offset_stamp_x: f32,
     pub offset_stamp_y: f32,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct LayoutConfig {
-    pub grid_cols: usize,
-    pub grid_rows_max: usize,
 }
 
 fn default_profiles() -> HashMap<String, Profile> {
@@ -96,11 +84,7 @@ impl Default for Config {
             import: ImportConfig {
                 default_action: ImportAction::Copy,
             },
-            profiles: HashMap::new(),
-            layout: LayoutConfig {
-                grid_cols: 4,
-                grid_rows_max: 8,
-            },
+            profiles: default_profiles(),
         }
     }
 }
@@ -137,7 +121,6 @@ pub fn load() -> crate::error::Result<Config> {
         default_printer: config_file.default_printer,
         import: config_file.import,
         profiles,
-        layout: config_file.layout,
     })
 }
 

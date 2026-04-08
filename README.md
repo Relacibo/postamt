@@ -1,128 +1,229 @@
 # postamt-rs
 
-A CLI tool for managing and printing German postal stamps (Briefmarken) from PDF files.
+Command-line tool for managing and printing digital stamps from Deutsche Post.
 
 ## Features
 
-- Import stamp PDFs with automatic matrix code extraction
-- SHA-256 hash-based duplicate detection
-- SQLite database for stamp tracking
-- Support for multiple envelope profiles (DL, C6)
-- Dry-run mode for testing
-- Mark stamps as used/available
-- XDG-compliant storage
+- Import stamp PDFs and automatically extract individual stamps
+- Track used/available stamps in local database
+- Print stamps on envelopes with configurable profiles
+- Support for different envelope sizes (DL, C6, etc.)
+- Interactive printer selection with configuration management
 
 ## Installation
 
 ```bash
-cargo build --release
+cargo install --path .
 ```
 
-The binary will be available at `target/release/postamt-rs`.
+### Shell Completions
 
-## Usage
-
-### Import stamps from PDF
+Generate shell completions for tab completion:
 
 ```bash
-# Copy PDF to vault
-postamt-rs add path/to/stamps.pdf
+# For Bash
+postamt completions bash > ~/.local/share/bash-completion/completions/postamt
 
-# Move PDF to vault
-postamt-rs add path/to/stamps.pdf --move
+# For Zsh
+postamt completions zsh > ~/.zsh/completions/_postamt
+
+# For Fish
+postamt completions fish > ~/.config/fish/completions/postamt.fish
 ```
 
-### Check available stamps
+## Quick Start
 
+1. Import a stamp sheet:
+   ```bash
+   postamt add stamps.pdf
+   ```
+
+2. Configure your printer (optional):
+   ```bash
+   postamt config default_printer Brother_HL_L2400DW
+   ```
+
+3. Print a stamp:
+   ```bash
+   postamt print
+   ```
+
+## Commands
+
+### `add` - Import stamps
 ```bash
-postamt-rs status
+# Copy PDF to vault and extract stamps
+postamt add stamps.pdf
+
+# Move instead of copy
+postamt add stamps.pdf --move
 ```
 
-### List envelope profiles
+Automatically detects:
+- Grid layout stamps (e.g., TestPrint.pdf with 4 columns)
+- Single stamps with matrix codes in filename
+- Generated stamp sheets from `gen-stamps` tool
 
+### `print` - Print stamps
 ```bash
-postamt-rs profiles
+# Print next available stamp (interactive selection)
+postamt print
+
+# Print specific stamp by matrix code
+postamt print A0_05BF_A50E_00_0000_002B
+
+# Dry run (save PDF to ./dry-runs/ instead of printing)
+postamt print --dry-run
+
+# Use specific envelope profile
+postamt print --profile C6
+
+# Override configured printer
+postamt print --printer MyPrinter
 ```
 
-### List available printers
-
+### `list` - List stamps
 ```bash
-postamt-rs printers
+# List all stamps and files
+postamt list
+
+# Filter by file hash
+postamt list --file a1b2c3d4...
+
+# Show only available stamps
+postamt list --available
+
+# Show only used stamps
+postamt list --used
+
+# Output as JSON
+postamt list --format json
 ```
 
-### Mark stamps
-
+### `printers` - List available printers
 ```bash
-# Mark stamp as used (by ID or matrix number)
-postamt-rs mark-used 1
-postamt-rs mark-used "A0 05BF A50E 00 0000 002B"
-
-# Mark stamp as available again
-postamt-rs mark-available 1
-postamt-rs mark-available "A0 05BF A50E 00 0000 002B"
+postamt printers
 ```
 
-### Print envelope
+Shows all system printers detected by `lpstat -e`, with markers for system default and configured default.
 
+### `config` - Manage configuration
 ```bash
-# Dry run (saves PDF to ./dry-runs/)
-postamt-rs print --dry-run
+# Show entire configuration
+postamt config
 
-# Print to default printer with default profile
-postamt-rs print
+# Get a specific value
+postamt config default_printer
+postamt config profiles.DL.width
 
-# Print with specific profile and printer
-postamt-rs print --profile C6 --printer my-printer
+# Set a value
+postamt config default_printer Brother_HL_L2400DW
+postamt config default_profile C6
+postamt config import.default_action move
+
+# Set nested values (profiles)
+postamt config profiles.DL.offset_stamp_x 175.0
 ```
+
+Configuration uses dot notation for nested values. All configuration is stored in `~/.config/postamt/config.toml`.
 
 ## Configuration
 
-Configuration is stored in `~/.config/postamt/config.toml` (auto-generated on first run).
+### Config File Location
+`~/.config/postamt/config.toml`
 
-Default configuration:
+If no config file exists, built-in defaults are used.
+
+### Config Structure
 ```toml
 default_profile = "DL"
-default_printer = "lpr"
+default_printer = "Brother_HL_L2400DW"  # optional
 
 [import]
-default_action = "copy"
+default_action = "copy"  # or "move"
 
-[[profiles]]
-name = "DL"
+# Built-in profiles (can be extended with custom profiles)
+[profiles.DL]
 width = 220.0
 height = 110.0
-offset_stamp_x = 180.0
-offset_stamp_y = 10.0
+offset_stamp_x = 170.0
+offset_stamp_y = 8.0
 
-[[profiles]]
-name = "C6"
+[profiles.C6]
 width = 162.0
 height = 114.0
 offset_stamp_x = 130.0
 offset_stamp_y = 10.0
-
-[layout]
-grid_cols = 4
-grid_rows_max = 8
 ```
 
-## Storage
+**Note:** The grid layout (4 columns × 8 rows max) is hardcoded for Deutsche Post stamp sheets and cannot be configured.
 
-- Database: `~/.local/share/postamt/postamt.db`
-- Vault: `~/.local/share/postamt/vault/`
-- Dry-run output: `./dry-runs/`
+### Profile Management
+- Built-in profiles (`DL`, `C6`) are always available
+- Add custom profiles in config file
+- Custom profiles override built-in profiles with same name
+- Use `postamt config profiles.<name>.<field> <value>` to modify
 
-## Requirements
+### Printer Selection Priority
+1. CLI argument: `--printer MyPrinter`
+2. Config default: `default_printer = "MyPrinter"`
+3. Interactive prompt if none configured
 
-- Single-page PDFs only
-- Matrix code format: `A0 XXXX XXXX XX XXXX XXXX`
-- Grid layout: 4 columns, up to 8 rows
-- Stamp value: 0.95€ (hardcoded in v1)
+## Data Storage
 
-## Development
+- **Database**: `~/.local/share/postamt/stamps.db` (SQLite)
+- **Vault**: `~/.local/share/postamt/vault/` (Original PDFs)
+- **Config**: `~/.config/postamt/config.toml`
 
-See `.github/initial-spec.md` for the complete specification.
+## Development Tools
+
+### `gen-stamps` - Generate test stamp sheets
+Located in `tools/gen-stamps/`:
+
+```bash
+cd tools/gen-stamps
+cargo run -- output.pdf
+```
+
+Generates stamp sheets with random matrix codes for testing. Randomly selects between TestPrint.pdf (2 rows) and TestPrint-full.pdf (8 rows) as template, replacing all `X` placeholders with random alphanumeric characters.
+
+## Example Workflow
+
+```bash
+# 1. Generate test stamps
+cd tools/gen-stamps && cargo run -- ../../test-stamps.pdf && cd ../..
+
+# 2. Import them
+postamt add test-stamps.pdf
+
+# 3. List available stamps
+postamt list --available
+
+# 4. Configure printer (one-time)
+postamt config default_printer Brother_HL_L2400DW
+
+# 5. Print stamps as needed
+postamt print                    # Interactive selection
+postamt print A0_05BF_...        # Specific stamp
+postamt print --dry-run          # Test without printing
+
+# 6. Check what's been used
+postamt list --used
+```
+
+## Grid Layout Coordinates
+
+The stamp extraction uses precise calibration based on the Deutsche Post grid layout:
+- Grid crosses mark exact stamp corners
+- Coordinates are measured from bottom-left (PDF coordinate system)
+- See `.github/initial-spec.md` for exact grid positions
+
+Reference PDFs in `assets/pdfs/example-pdfs/`:
+- `Briefmarken.1Stk.07.04.2026_1916.pdf` - Single stamp example
+- `TestPrint.pdf` - 4×2 grid for testing
+- `TestPrint-full.pdf` - 4×8 full grid
 
 ## License
 
 See LICENSE file.
+
