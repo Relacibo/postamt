@@ -43,6 +43,7 @@ fn run() -> error::Result<()> {
             printer,
             dry_run,
             force,
+            rotate,
         } => {
             stamp::print_stamp(
                 &conn,
@@ -52,6 +53,7 @@ fn run() -> error::Result<()> {
                 printer.as_deref(),
                 dry_run,
                 force,
+                rotate,
             )?;
         }
         Commands::List {

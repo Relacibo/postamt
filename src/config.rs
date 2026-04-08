@@ -51,6 +51,8 @@ pub struct Profile {
     pub height: f32,
     pub offset_stamp_x: f32,
     pub offset_stamp_y: f32,
+    #[serde(default)]
+    pub rotate: bool,
 }
 
 fn default_profiles() -> HashMap<String, Profile> {
@@ -62,6 +64,7 @@ fn default_profiles() -> HashMap<String, Profile> {
             height: 110.0,
             offset_stamp_x: 170.0,
             offset_stamp_y: 8.0,
+            rotate: false,
         },
     );
     profiles.insert(
@@ -71,6 +74,7 @@ fn default_profiles() -> HashMap<String, Profile> {
             height: 114.0,
             offset_stamp_x: 130.0,
             offset_stamp_y: 10.0,
+            rotate: false,
         },
     );
     profiles

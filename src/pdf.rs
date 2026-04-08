@@ -111,15 +111,17 @@ pub fn create_envelope(
     profile_height: f32,
     offset_x: f32,
     offset_y: f32,
+    rotate: bool,
     stamp_pdf: &[u8],
 ) -> Result<Vec<u8>> {
     let mut doc = Document::load_mem(stamp_pdf)?;
 
     // Convert mm to points
-    let page_width = profile_width * 2.834_645_7;
-    let page_height = profile_height * 2.834_645_7;
-    let offset_x_pt = offset_x * 2.834_645_7;
-    let offset_y_pt = offset_y * 2.834_645_7;
+    let mm_to_pt = 2.834_645_7;
+    let page_width = profile_width * mm_to_pt;
+    let page_height = profile_height * mm_to_pt;
+    let offset_x_pt = offset_x * mm_to_pt;
+    let offset_y_pt = offset_y * mm_to_pt;
 
     let pages = doc.get_pages();
     let page_id = *pages.keys().next().unwrap();
@@ -165,12 +167,14 @@ pub fn create_envelope(
     // So we need: envelope_height - offset_y_pt (to convert to "from bottom")
     let target_y_pt = page_height - offset_y_pt - (113.861 * 0.88); // Adjust for stamp height (~100pts)
 
+    // Simple translation for non-rotated
     let mut new_content = format!(
         "q\n1 0 0 1 {} {} cm\n",
         offset_x_pt - crop_x_min,
         target_y_pt - crop_y_min
     )
     .into_bytes();
+    
     new_content.extend_from_slice(&existing_content);
     new_content.extend_from_slice(b"\nQ\n");
 
@@ -178,9 +182,9 @@ pub fn create_envelope(
     let new_stream = Object::Stream(lopdf::Stream::new(Dictionary::new(), new_content));
     let new_contents_id = doc.add_object(new_stream);
 
-    // Modify page
+    // Modify page (do NOT swap dimensions - just set rotation)
     if let Ok(page_dict) = doc.get_object_mut(page_ref).and_then(|o| o.as_dict_mut()) {
-        // Set MediaBox to envelope size
+        // Set MediaBox to envelope size (always landscape)
         page_dict.set(
             "MediaBox",
             Object::Array(vec![
@@ -190,6 +194,11 @@ pub fn create_envelope(
                 Object::Real(page_height),
             ]),
         );
+
+        // Set rotation if needed (270 = counter-clockwise 90°)
+        if rotate {
+            page_dict.set("Rotate", Object::Integer(270));
+        }
 
         // Remove CropBox - show the whole envelope
         page_dict.remove(b"CropBox");

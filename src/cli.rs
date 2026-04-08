@@ -61,6 +61,8 @@ pub enum Commands {
         dry_run: bool,
         #[arg(long, help = "Force printing even if stamp is marked as used")]
         force: bool,
+        #[arg(long, help = "Rotate envelope 90° counter-clockwise for portrait printing")]
+        rotate: bool,
     },
     
     #[command(about = "List stamps and files")]

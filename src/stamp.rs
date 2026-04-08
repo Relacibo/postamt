@@ -109,6 +109,7 @@ pub fn print_stamp(
     printer_name: Option<&str>,
     dry_run: bool,
     force: bool,
+    rotate: bool,
 ) -> Result<()> {
     // Get stamp - either specific one or oldest available
     let stamp = if let Some(id) = identifier {
@@ -154,11 +155,13 @@ pub fn print_stamp(
     let stamp_data = pdf::extract_stamp(&source_pdf, stamp.stamp_index as usize)?;
 
     // Create envelope
+    let should_rotate = rotate || profile.rotate;
     let envelope_data = pdf::create_envelope(
         profile.width,
         profile.height,
         profile.offset_stamp_x,
         profile.offset_stamp_y,
+        should_rotate,
         &stamp_data,
     )?;
 

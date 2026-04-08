@@ -148,15 +148,31 @@ width = 220.0
 height = 110.0
 offset_stamp_x = 170.0
 offset_stamp_y = 8.0
+rotate = false  # Set to true for portrait orientation
 
 [profiles.C6]
 width = 162.0
 height = 114.0
 offset_stamp_x = 130.0
 offset_stamp_y = 10.0
+rotate = false
 ```
 
 **Note:** The grid layout (4 columns × 8 rows max) is hardcoded for Deutsche Post stamp sheets and cannot be configured.
+
+### Envelope Rotation
+
+By default, envelopes are generated in landscape orientation (stamp at top-right). Many printers work better when the envelope is fed in portrait orientation. You can enable rotation in your profile:
+
+```bash
+# Enable counter-clockwise rotation for DL envelopes
+postamt config profiles.DL.rotate true
+```
+
+When rotation is enabled, the PDF is rotated 90° counter-clockwise so that:
+- The envelope is in portrait orientation (tall)
+- The stamp remains at the top
+- The envelope can be fed into the printer with the flap on the left side
 
 ### Profile Management
 - Built-in profiles (`DL`, `C6`) are always available
